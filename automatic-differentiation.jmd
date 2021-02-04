@@ -1,0 +1,279 @@
+---
+title : Automatic Differentiation
+author : Gil Miranda
+date : 29 de Janeiro de 2021
+---
+
+## Números Duais (Dual Numbers)
+
+Introduzido em `1873` por `William Clifford`, os números duais são números da forma
+$$
+a + b\epsilon
+$$
+Onde $\epsilon^2 = 0$, a adição de dois números duais é definida da forma usual, componente a componente, enquanto a
+multiplicação é definida por
+$$
+(a+b\epsilon)(c+d\epsilon) = (a+c)\left((ad + bc)\epsilon\right)
+$$
+
+Podemos representar um número dual $z = a + b\epsilon$ atráves de um par ordenado $(a,b)$
+#### Números Duais e a série de Taylor
+O que acontece se fizermos a expansão em série de Taylor de uma função avaliada em um número dual?
+Assumindo que $f(x)$ tenha expansão em série de Taylor, tomando um número dual $z = a + \epsilon$
+$$
+\begin{align*}
+f(a + \epsilon) &= f(a) + f'(a)\epsilon + \frac{f''(a)}{2!}\epsilon^2 + \sum_{k=3}^\infty \frac{f^{(k)}(a)}{k!}\epsilon^2 \epsilon^{(k-2)}\\
+&=  f(a) + f'(a)\epsilon + 0\\
+&=  f(a) + f'(a)\epsilon
+\end{align*}
+$$
+Então o par ordenado do número dual para $f(z) = (a, f'(a))$, com isso nós temos uma maneira de encontrar o valor númerico EXATO da
+derivada de uma função $f$ no ponto $a$ enquanto calculamos a própria função no ponto!!
+
+
+#### Números Duais e Julia, uma implementação rápida
+
+Vamos criar uma nova estrutura de dados para comportar os números `Duais`
+
+```julia
+struct D <: Number
+    v::Float64
+    ϵ::Float64
+end
+```
+
+Um número dual será formado então por duas partes, uma real que acessaremos com `v` de valor, e uma dual que acessaremos
+ com `ϵ`. Podemos criar um número dual com o comando
+
+```julia
+x = D(3.,1.)
+```
+Ainda não sabemos operar com os números duais, precisamos criar regras para isso
+
+```julia
+import Base: +, /, -, *, cos, sin, log,  convert, promote_rule
+
++(x::D, y::D) = D(x.v .+ y.v, x.ϵ .+ y.ϵ)
+-(x::D, y::D) = D(x.v .- y.v, x.ϵ .- y.ϵ)
+/(x::D, y::D) = D(x.v/y.v, (y.v*x.ϵ - x.v*y.ϵ)/y.ϵ^2)
+*(x::D, y::D) = D(x.v*y.v, x.ϵ*y.v + x.v*y.ϵ)
+cos(x::D) = D(cos(x.v), -sin(x.v)*x.ϵ)
+sin(x::D) = D(sin(x.v), cos(x.v)*x.ϵ)
+log(x::D) = D(log(x.v), 1/x.v * x.ϵ)
+
+convert(::Type{D}, x::Real) = D(x,zero(x))
+promote_rule(::Type{D}, ::Type{<:Number}) = D
+Base.show(io::IO,x::D) = print(io, x.v, " + ", x.ϵ, "ϵ")
+```
+Agora sabemos usar todas essas funções com números duais, a última linha é para que possamos printar de maneira
+mais legível, desta forma agora o print de um número dual fica:
+
+```julia
+print(x)
+```
+
+Agora para saber o valor da derivada de $x^3$ no ponto $x = 4$, basta operarmos o número dual
+```julia
+x = D(4,1)
+println("x^3 = ", x^3)
+println("O valor da derivada é ", (x^3).ϵ)
+print("De forma analitica: (x^3)' = 3x^2, para x = 4 ⟹ 3*(4)^2 = 48")
+```
+
+Ensinamos ao computador como operar com as operações básica e com as funções `cos, sin, log` nos duais, o que acontece
+se tentarmos agora derivar uma expressão mais complicada? Sem ensinar nada sobre regra da cadeia ao nosso sistema de
+números duais?
+
+$$
+g(x) = (\cos(x)+\sin(x^2)) \cdot \log(\sin(3x))
+$$
+Resolvendo analiticamente, temos como derivada:
+$$
+g'(x) = \left(-\sin \left(x\right)+\cos \left(x^2\right)\cdot \:2x\right)\log \left(\sin \left(3x\right)\right)+3\cot \left(3x\right)\left(\cos \left(x\right)+\sin \left(x^2\right)\right)
+$$
+Vamos olhar para o valor da derivada em $x = \frac{\pi}{4}$
+```julia
+x = D(π/4,1)
+
+g(x::D) = (cos(x) + sin(x^2))*log(sin(3*x))
+
+∂g(x) = (-sin(x)+cos(x^2)*2*x)*log(sin(3*x))+ 3*cot(3*x)*(cos(x)+sin(x^2)) ## Derivada analitíca
+
+println("O valor da derivada analitíca é: ", g(x).ϵ)
+print("O valor da derivada utilizando números duais é: ", ∂g(π/4))
+```
+
+#### Números Duais e derivadas de ordem superior
+Derivadas de funções $f: \mathbb{R}^n \to \mathbb{R}$ também podem ser calculadas utilizando os números duais.
+Vamos tomar como exemplo a função
+$$f: \underset{(x,y)}{\mathbb{R}^2} \underset{\mapsto}{\to} \underset{x^2sin(y)}{\mathbb{R}}$$
+Analiticamente, o gradiente de $f$ fica
+$$
+\begin{align*}
+\nabla f &= \left(\frac{\partial f}{\partial x},\frac{\partial f}{\partial y}\right)\\
+&= \left(2x sin(y), x^2cos(y)\right)
+\end{align*}
+$$
+
+Podemos calcular a derivada parcial de $f$ em relação a $x$ tomando um $y$ fixo e calculando a derivada de $f$ em $x$ da maneira usual
+isso nos dá uma ideia de como utilizar a álgebra dos Números Duais para calcular as derivadas parciais.
+Para isso basta usarmos como número Dual apenas a variável de interesse na chamada da função, por exemplo, dada a função $f$,
+calculamos suas derivadas parciais com
+```julia
+f(x,y) = x^2*sin(y)
+∂fDx = f(D(2,1), π/3) ## Derivada parcial de f_x utilizando Duais
+∂fDy = f(2, D(π/3,1)) ## Derivada parcial de f_y utilizando Duais
+println(∂fDx)
+print(∂fDy)
+```
+Podemos comparar os resultados com o resultado analitíco
+```julia
+∂f∂x(x,y) = 2*x*sin(y) ## Derivada parcial de f_x analitica
+∂f∂y(x,y) = x^2*cos(y) ## Derivada parcial de f_y analitica
+
+println("O vetor gradiente calculado de forma analítica é dado por: ( ", ∂f∂x(2, π/3) ,",",∂f∂y(2,π/3) , ")")
+println("O vetor gradiente calculado de por números duais é dado por: ( ", ∂fDx.ϵ, ",", ∂fDy.ϵ, ")")
+```
+O principio pode ser generalizado para calcular a matriz jacobiana de funções $\mathbb{R}^n \to \mathbb{R}^m$
+
+```julia
+h(x,y) = (sin(x)*y, x*cos(y))
+A = [[h(D(π/2,1), π/4 )[1].ϵ, h(D(π/2,1), π/4 )[2].ϵ],[h(D(π/2,1), π/4 )[1].ϵ, h(D(π/2,1), π/4 )[2].ϵ]]
+show(stdout, "text/plain", A)
+```
+
+## Diferenciação Automática (Automatic Differentiation)
+Podemos dividir os metódos de calcular computacionalmente derivadas em 4 categorias (Baydin et al. (2018))
+1. Encontrar a fórmula analiticamente e executar o cálculo com o computador;
+1. Derivação númerica atráves de diferenças finitas;
+1. Diferenciação Simbólica, atráves de um `SAS` (Symbolic Algebra System)
+1. Diferenciação Automática
+
+É importante notar que as `4` categorias estão bem divididas entre si, neste sentido, a Diferenciação Automática NÃO é
+uma derivação númerica, e também não é uma derivação simbólica, alguns autores trazem um conceito de ser um meio termo entre
+os dois metódos.
+
+Enquanto a Diferenciação Númerica nos dá o valor númerico da derivada da função em um ponto, ela é um metódo aproximado
+do cálculo dessas derivadas, baseado na definição assíntotica de derivada.
+
+A Diferenciação Simbólica não introduz erros de truncamento e não é uma aproximação, em um sentido de produzir um valor
+exato para a derivada, mas traz consigo problemas de que os cálculos e expressões a serem computadas envolvidas no
+processo crescem exponencialmente, e podem ficar bem complicadas até para uma função aparentemente simples.
+
+No meio temos a Diferenciação Automática, que entrega um valor númerico da derivada no ponto mas não é uma aproximação, é um
+valor exato. O fato de termos um valor exato da derivada vem da expansão em série de Taylor vista na seção anterior, todos os
+termos de derivadas de ordem maior que `2` são cancelados pois estão sendo multiplicados por `ϵ² = 0`
+
+A Diferenciação Automática possui dois metódos principais para o cálculo das derivadas, cada um com suas vantagens e particularidades
+
+##### Preparativos
+Para os próximos exemplos vamos tomar a seguinte função $h: \mathbb{R}^3 \to \mathbb{R}$, avaliada no ponto $\theta = (-1, π/4, 2π)$
+$$
+\begin{align*}
+h(x,y,z) &= (x+y)\sin(yz)\\
+\frac{\partial h}{\partial x} &= \sin(yz)\\
+\frac{\partial h}{\partial y} &= \sin(yz) + z(x+y)\cos(yz)\\
+\frac{\partial h}{\partial z} &= (x+y)y\cos(yz)\\
+\end{align*}
+$$
+
+```julia
+h(x,y,z) = (x+y)*sin(y*z)
+
+∂h∂x(x,y,z) = sin(y*z)
+∂h∂y(x,y,z) = sin(y*z)+z*(x+y)*cos(y*z)
+∂h∂z(x,y,z) = (x+y)*y*cos(y*z)
+θ = [-1, π/4, 2*π]
+```
+Notação: Quando utilizo subscrito $\epsilon$ em um número dual, quer dizer que estou tomando apenas a parte dual, que acompanha o $\epsilon$,
+por exemplo: $(2+\epsilon)^2 = 2+4\epsilon$, mas $(2+\epsilon)^2_\epsilon = 4$
+#### Forward AD
+Vamos visualizar a função como um grafo computacional, onde o cálculo dos valores da função são divididos em cada etapa
+![Grafo computacional para h(x) = w](diagrama1.png)
+Agora podemos pensar em como calcular $\frac{\partial h}{\partial y}$, dado que $h(θ) = w$
+$$
+\begin{align*}
+w &= tu\\
+&= (x+y)\sin(v)\\
+&= (x+y)\sin(yz)\\ \\
+w_y &= (t(y)u(y))'\\
+&= t'(y)u(y) + t(y)u'(y)\\
+&= h(x, y+\epsilon, z)_\epsilon
+\end{align*}
+$$
+Então usar o metódo `Forward AD` nada mais é do que avaliar a função no ponto com Números Duais
+
+
+
+#### Reverse AD
+
+```julia
+using LinearAlgebra
+f(x,y,z) = x*y*sin(y*z)
+f(D(3,1), -1, 2)
+f(3, D(-1,1), 2)
+f(3, -1, D(2,1))
+f_x = -sin(-2)
+f_y = 3*sin(-2) - 6*cos(-2)
+f_z = 3*cos(-2)
+
+A = zeros(7,7) + I
+A[1,4] = 1
+A[2,4] = -3
+A[2,5] = -2
+A[3,5] = 1
+A[4,7] = -sin(-2)
+A[5,6] = cos(-2)
+A[6,7] = -3
+b = zeros(7)
+b[7] = 1
+X = A\b
+```
+
+```julia
+function reverseAD()
+```
+
+##### Custo computacional
+Vamos pensar na matriz Jacobiana de uma função $f: \mathbb{R}^n \to \mathbb{R}^m$
+$$
+J_f = \begin{bmatrix}
+\frac{\partial f_1}{\partial x_1} & \dots & \frac{\partial f_1}{\partial x_n}\\
+\vdots & \ddots & \vdots \\
+\frac{\partial f_m}{\partial x_1} & \dots & \frac{\partial f_m}{\partial x_n}\\
+\end{bmatrix}
+$$
+Efetuar um "passo" do `Forward AD` em uma variável $x_k$ irá nos retornar
+$$
+f(x_1, \dots, x_k + \epsilon, \dots, x_n) = (f_1, \dots, f_m) + \left(\frac{\partial f_1}{\partial x_k}, \dots, \frac{\partial f_m}{\partial x_k}\right)\epsilon
+$$
+Onde a parte associada ao número Dual é justamente uma coluna da matriz jacobiana, então para calcular toda a matriz
+seria preciso repetir a operação $n$ vezes.
+Seja $ops(f)$ o custo computacional/de operações para o cálculo de $f$, e $c > 0$, temos que o custo do metódo `Forward AD` é $n\cdot c \cdot ops(f)$ ([^Baydin]).
+Isso nos dá uma ideia de que o metódo pode ser bom para funções $\mathbb{R}^n \to \mathbb{R}^m$ com $n \ll m$
+
+No metódo `Reverse AD` quando calculamos um passo estamos calculando a derivada de uma função em relação à todas as variáveis de uma vez,
+nesse sentido:
+$$
+f(x_1, \dots, x_n) &= (f_1, \dots, f_m)\\
+\text{Cada passo do Reverse AD irá calcular}
+\nabla f_k =  \left(\frac{\partial f_k}{\partial x_1}, \dots, \frac{\partial f_k}{\partial x_n}\right)\epsilon
+$$
+Então calculamos uma linha inteira da matriz Jacobiana, nesse sentido temos que o custo do metódo `reverseAD` é $m\cdot c \cdot ops(f)$ ([^Baydin]).
+Isso nos dá uma ideia de que o metódo pode ser bom para funções $\mathbb{R}^n \to \mathbb{R}^m$ com $m \ll n$
+
+Em particular, estamos interessados no modo reverso para funções de erro que são do tipo $\mathbb{R} \to \mathbb{R}^m$
+que é utilizado em sua principal aplicação: Cálculo das derivadas para aprendizado com Gradiente Descendente
+
+#### Aplicações/Backpropagation
+O algoritmo de `Backpropagation` é um caso particular do modo de Diferenciação Automática Reverso quando aplicado a uma rede neural.
+No `Backpropagation` estamos interessados em calcular o gradiente de uma função $\mathbb{R}^n \to \mathbb{R}$ geralmente
+chamada de função perda, em razão dos parâmetros da rede neural (pesos e vieses)
+## Referências
+
+1. [Rojas, Raul (1996). Neural Networks - A Systematic Introduction, Springer](https://page.mi.fu-berlin.de/rojas/neural/)
+1. [Michael A. Nielsen (2015), Neural Networks and Deep Learning, Determination Press](http://neuralnetworksanddeeplearning.com)
+1. [Austin, David (2017). How to Differentiate with a Computer](http://www.ams.org/publicoutreach/feature-column/fc-2017-12)
+1. [Atilim Gunes Baydin et al. (2018), Automatic Differentiation in Machine Learning: a Survey, JMLR](https://jmlr.org/papers/v18/17-468.html)
+1. [Rackauckas, Chris (2020). Forward-Mode Automatic Differentiation (AD) via High Dimensional Algebras](https://mitmath.github.io/18337/lecture8/automatic_differentiation)
+1. [Radcliffe, Sidney (2020). Reverse-mode automatic differentiation from scratch, in Python](https://sidsite.com/posts/autodiff/)
