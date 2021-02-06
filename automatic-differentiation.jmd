@@ -103,7 +103,7 @@ println("O valor da derivada analitíca é: ", g(x).ϵ)
 print("O valor da derivada utilizando números duais é: ", ∂g(π/4))
 ```
 
-#### Números Duais e derivadas de ordem superior
+#### Números Duais e derivadas multivariaveis
 Derivadas de funções $f: \mathbb{R}^n \to \mathbb{R}$ também podem ser calculadas utilizando os números duais.
 Vamos tomar como exemplo a função
 $$f: \underset{(x,y)}{\mathbb{R}^2} \underset{\mapsto}{\to} \underset{x^2sin(y)}{\mathbb{R}}$$
@@ -266,10 +266,21 @@ Se você entendeu o processo de cálculo das derivadas parciais de $z$ atráves 
 
 ##### O procedimento para Reverse AD
 
-Há dois passos para o cálculo das derivadas pelo metódo reverso, o primeiro é chamado de `Forward Pass`, que é avaliar
+Vamos apresentar duas maneiras de implementar o metódo reverso, e implementar uma delas.
+A primeira é exatamente o uso do diagrama visto na regra da cadeia.
+
+Há dois passos para o cálculo das derivadas pelo metódo reverso, o primeiro é chamado de `Feed Forward`, que é avaliar
 a função atráves do grafo computacional visto na seção sobre `Forward AD`, e com isso teremos as variáveis do traço da mesma maneira,
 mas ao invés de calcular as tangentes, que seriam as derivadas de cada variável do traço em relação às variáveis de entrada,
-calculamos agora o `adjunto`, que é a derivada da função em razão de variável do traço. Nesse sentido temos
+calculamos agora o `adjunto`, que é a derivada da função em razão da variável "filha", que vem antes. Nesse sentido temos o seguinte diagrama
+
+![Árvore para a regra da cadeia](diagrama2.png)
+
+Para encontrar as derivadas que desejamos, basta vir multiplicando da direita para a esquerda os ramos do diagrama, assim como no processo da regra da cadeia!
+
+---
+
+Uma outra maneira, é montar as variáveis adjuntas de forma que tenhamos um sistema linear, as variáveis conjuntas serão então as derivadas da própria função em relação a cada variável do traço, podemos montar a seguinte tabela:
 
 | Traço        | Adjunto        |
 | ------------- | ------------- |

@@ -700,7 +700,7 @@ f(a + \epsilon) &= f(a) + f'(a)\epsilon + \frac{f''(a)}{2!}\epsilon^2 + \sum_{k=
 
 
 <pre class="output">
-Main.##WeaveSandBox#312.D&#40;3.0, 1.0&#41;
+Main.##WeaveSandBox#263.D&#40;3.0, 1.0&#41;
 </pre>
 
 
@@ -979,7 +979,12 @@ Gradiente calculado analiticamente: ∇h &#61; &#40;-0.9753679720836315,-1.27279
 \]</p>
 <p>Se você entendeu o processo de cálculo das derivadas parciais de <span class="math">$z$</span> atráves desta árvore, você entendeu o modo reverso da Diferenciação Automática&#33;&#33;</p>
 <h5>O procedimento para Reverse AD</h5>
-<p>Há dois passos para o cálculo das derivadas pelo metódo reverso, o primeiro é chamado de <code>Forward Pass</code>, que é avaliar a função atráves do grafo computacional visto na seção sobre <code>Forward AD</code>, e com isso teremos as variáveis do traço da mesma maneira, mas ao invés de calcular as tangentes, que seriam as derivadas de cada variável do traço em relação às variáveis de entrada, calculamos agora o <code>adjunto</code>, que é a derivada da função em razão de variável do traço. Nesse sentido temos</p>
+<p>Vamos apresentar duas maneiras de implementar o metódo reverso, e implementar uma delas. A primeira é exatamente o uso do diagrama visto na regra da cadeia.</p>
+<p>Há dois passos para o cálculo das derivadas pelo metódo reverso, o primeiro é chamado de <code>Feed Forward</code>, que é avaliar a função atráves do grafo computacional visto na seção sobre <code>Forward AD</code>, e com isso teremos as variáveis do traço da mesma maneira, mas ao invés de calcular as tangentes, que seriam as derivadas de cada variável do traço em relação às variáveis de entrada, calculamos agora o <code>adjunto</code>, que é a derivada da função em razão da variável &quot;filha&quot;, que vem antes. Nesse sentido temos o seguinte diagrama</p>
+<p><img src="diagrama2.png" alt="Árvore para a regra da cadeia" /></p>
+<p>Para encontrar as derivadas que desejamos, basta vir multiplicando da direita para a esquerda os ramos do diagrama, assim como no processo da regra da cadeia&#33;</p>
+<hr />
+<p>Uma outra maneira, é montar as variáveis adjuntas de forma que tenhamos um sistema linear, as variáveis conjuntas serão então as derivadas da própria função em relação a cada variável do traço, podemos montar a seguinte tabela:</p>
 <table><tr><th>Traço</th><th>Adjunto</th></tr><tr><td><span class="math">$t = x+y$</span></td><td><span class="math">$\bar{w}=\frac{\partial w}{\partial w}=1$</span></td></tr><tr><td><span class="math">$v=yz$</span></td><td><span class="math">$\bar{u}=\frac{\partial w}{\partial u}\bar{w}$</span></td></tr><tr><td><span class="math">$u=sin(v)$</span></td><td><span class="math">$\bar{v}=\frac{\partial u}{\partial v}\bar{u}$</span></td></tr><tr><td><span class="math">$w = tu$</span></td><td><span class="math">$\bar{t} = \frac{\partial w}{\partial t}\bar{w}$</span></td></tr><tr><td></td><td><span class="math">$\bar{x} = \frac{\partial t}{\partial x}\bar{t} = \frac{\partial w}{\partial x}$</span></td></tr><tr><td></td><td><span class="math">$\bar{y} = \frac{\partial t}{\partial y}\bar{t}+\frac{\partial v}{\partial y}\bar{v} = \frac{\partial w}{\partial y}$</span></td></tr><tr><td></td><td><span class="math">$\bar{z} = \frac{\partial v}{\partial z}\bar{v} = \frac{\partial w}{\partial z}$</span></td></tr></table>
 <p>Perceba que as variáveis adjuntas nos dão um sistema a ser resolvido&#33; Podemos então montar a seguinte matriz</p>
 <p class="math">\[
