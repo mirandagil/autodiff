@@ -201,38 +201,144 @@ w_y &= (t(y)u(y))'\\
 &= h(x, y+\epsilon, z)_\epsilon
 \end{align*}
 $$
-Então usar o metódo `Forward AD` nada mais é do que avaliar a função no ponto com Números Duais
+Então usar o metódo `Forward AD` nada mais é do que avaliar a função no ponto com Números Duais, mas vamos implementar
+o procedimento de grafo computacional acima para calcular a derivada no ponto $\theta$, e também por números Duais
+```julia
+function ForwardAD(x,y,z, em='x')
+    ## Traço
+    t = x+y
+    v = y*z
+    u = sin(v)
+    w = t*u
 
+    ## Tangentes
+    if em == 'x'
+        t̄ = 1
+        v̄ = 0
+        ū = 0
+        w̄ = t̄*u
+    elseif em == 'y'
+        t̄ = 1
+        v̄ = z
+        ū = cos(v)*v̄
+        w̄ = u + ū*t
+    else
+        t̄ = 0
+        v̄ = y
+        ū = cos(v)*v̄
+        w̄ = ū*t
+    end
+end
+```
+
+E podemos visualizar os resultados
+
+```julia
+println("Forward implementado manualmente: ∇h = (", ForwardAD(θ..., 'x'),",",ForwardAD(θ..., 'y'),",",ForwardAD(θ..., 'z'),")")
+println("Forward implementado com Duais: ∇h = (", h(D(-1,1), π/4, 2*π).ϵ,",",h(-1, D(π/4,1), 2*π).ϵ,",",h(-1, π/4, D(2*π,1)).ϵ,")")
+println("Gradiente calculado analiticamente: ∇h = (", ∂h∂x(θ...),",",∂h∂y(θ...),",",∂h∂z(θ...),")")
+```
 
 
 #### Reverse AD
 
+Vamos agora olhar para o outro metódo de Diferenciação Automática, o metódo reverso, que nada mais é do que a aplicação
+da regra da cadeia multivariável.
+
+##### Regra da Cadeia multivariável
+
+Vamos olhar para o diagrama da regra da cadeia de uma função $$z(x(s,t),y(s,t))$$
+
+![Árvore para a regra da cadeia](chainrule.png)
+
+Para calcular as derivadas parciais de $z$ em relação a $s,t$, podemos vir "descendo" a árvore multiplicando as derivadas
+que estão no mesmo caminho, se alguma variável alvo aparece em dois "ramos" diferentes da árvore, somamos os ramos ao final,
+ ficando então:
+
+$$
+\begin{align*}
+\frac{\partial z}{\partial s} &= \frac{\partial z}{\partial x}\frac{\partial x}{\partial s} + \frac{\partial z}{\partial y}\frac{\partial y}{\partial s}\\
+\frac{\partial z}{\partial t} &= \frac{\partial z}{\partial x}\frac{\partial x}{\partial t} + \frac{\partial z}{\partial y}\frac{\partial y}{\partial t}
+\end{align*}
+$$
+
+Se você entendeu o processo de cálculo das derivadas parciais de $z$ atráves desta árvore, você entendeu o modo reverso da Diferenciação Automática!!
+
+##### O procedimento para Reverse AD
+
+Há dois passos para o cálculo das derivadas pelo metódo reverso, o primeiro é chamado de `Forward Pass`, que é avaliar
+a função atráves do grafo computacional visto na seção sobre `Forward AD`, e com isso teremos as variáveis do traço da mesma maneira,
+mas ao invés de calcular as tangentes, que seriam as derivadas de cada variável do traço em relação às variáveis de entrada,
+calculamos agora o `adjunto`, que é a derivada da função em razão de variável do traço. Nesse sentido temos
+
+| Traço        | Adjunto        |
+| ------------- | ------------- |
+| $t = x+y$     | $\bar{w}=\frac{\partial w}{\partial w}=1$  |
+| $v=yz$      | $\bar{u}=\frac{\partial w}{\partial u}\bar{w}$ |
+| $u=sin(v)$ | $\bar{v}=\frac{\partial u}{\partial v}\bar{u}$     |
+| $w = tu$   | $\bar{t} = \frac{\partial w}{\partial t}\bar{w}$   |
+| | $\bar{x} = \frac{\partial t}{\partial x}\bar{t} = \frac{\partial w}{\partial x}$   |
+| | $\bar{y} = \frac{\partial t}{\partial y}\bar{t}+\frac{\partial v}{\partial y}\bar{v} = \frac{\partial w}{\partial y}$   |
+| | $\bar{z} = \frac{\partial v}{\partial z}\bar{v} = \frac{\partial w}{\partial z}$   |
+
+Perceba que as variáveis adjuntas nos dão um sistema a ser resolvido! Podemos então montar a seguinte matriz
+
+$$
+A = \left[\begin{array}{ccccccc} 1 & 0 & 0 & 0 & 0 & 0 & 0 \\ -\frac{\partial w}{\partial u} & 1 & 0 & 0 & 0 & 0 & 0 \\ 0 & -\frac{\partial u}{\partial v} & 1 & 0 & 0 & 0 & 0 \\ -\frac{\partial w}{\partial t} & 0 & 0 & 1 & 0 & 0 & 0 \\ 0 & 0 & 0 & -\frac{\partial t}{\partial x} & 1 & 0 & 0 \\ 0 & 0 & -\frac{\partial v}{\partial y} & -\frac{\partial t}{\partial y} & 0 & 1 & 0 \\ 0 & 0 & -\frac{\partial v}{\partial z} & 0 & 0 & 0 & 1 \end{array}\right], X = \left[\begin{array}{c} \bar{w} \\ \bar{u} \\ \bar{v} \\ \bar{t} \\ \bar{x} \\ \bar{y} \\ \bar{z} \end{array}\right]
+$$
+
+Perceba que este sistema nos dá
+$$
+AX = \left[\begin{array}{ccccccc} 1&0&0&0&0&0&0 \end{array}\right]^t
+$$
+
+Como a matriz é triangular, é bem fácil resolvermos e as últimas componentes do vetor $X$ serão o vetor gradiente que estamos em busca.
+Basta então calcular as derivadas intermediárias, podem ser calculadas a mão, ou utilizando números duais, vamos
+escrever a função que faz o `Reverse AD` para calcular $\nabla h(x,y,z)$
+
 ```julia
 using LinearAlgebra
-f(x,y,z) = x*y*sin(y*z)
-f(D(3,1), -1, 2)
-f(3, D(-1,1), 2)
-f(3, -1, D(2,1))
-f_x = -sin(-2)
-f_y = 3*sin(-2) - 6*cos(-2)
-f_z = 3*cos(-2)
+function ReverseAD(x,y,z)
+    ## Traço
+    tx = D(x,1) + y
+    ty = x + D(y,1)
+    vy = D(y,1)*z
+    vz = y*D(z,1)
+    u = sin(D(vy.v,1))
+    wu = tx.v*D(u.v,1)
+    wt = D(tx.v,1)*u.v
 
-A = zeros(7,7) + I
-A[1,4] = 1
-A[2,4] = -3
-A[2,5] = -2
-A[3,5] = 1
-A[4,7] = -sin(-2)
-A[5,6] = cos(-2)
-A[6,7] = -3
-b = zeros(7)
-b[7] = 1
-X = A\b
+    ∂w∂u = wu.ϵ
+    ∂u∂v = u.ϵ
+    ∂w∂t = wt.ϵ
+    ∂t∂x = tx.ϵ
+    ∂t∂y = ty.ϵ
+    ∂v∂y = vy.ϵ
+    ∂v∂z = vz.ϵ
+
+    A = zeros(7,7) + I
+    A[2,1] = -∂w∂u
+    A[3,2] = -∂u∂v
+    A[4,1] = -∂w∂t
+    A[5,4] = -∂t∂x
+    A[6,3] = -∂v∂y
+    A[6,4] = -∂t∂y
+    A[7,3] = -∂v∂z
+    b = zeros(7)
+    b[1] = 1
+    X = A\b
+    return X[end-2:end]
+end
 ```
-
+Calculando em $\theta$
 ```julia
-function reverseAD()
+println("∇h(θ) = ", ReverseAD(θ...))
 ```
+
+Há outras maneiras de implementar o `Reverse AD`, está é uma das mais fáceis, e apresentado em [^Austin].
+Note que implementar o metódo reverso para um caso geral é muito mais complicado do que o metódo direto.
+Todos estes metódos estão implementados no `Julia` atráves das mais diversas bibliotecas: `ForwardDiff.jl, ReverseDiff.jl, DualNumbers.jl` e também nas
+biblitecas de Redes Neurais e Otimização da sua linguagem favorita.
 
 ##### Custo computacional
 Vamos pensar na matriz Jacobiana de uma função $f: \mathbb{R}^n \to \mathbb{R}^m$
@@ -255,9 +361,11 @@ Isso nos dá uma ideia de que o metódo pode ser bom para funções $\mathbb{R}^
 No metódo `Reverse AD` quando calculamos um passo estamos calculando a derivada de uma função em relação à todas as variáveis de uma vez,
 nesse sentido:
 $$
+\begin{align*}
 f(x_1, \dots, x_n) &= (f_1, \dots, f_m)\\
-\text{Cada passo do Reverse AD irá calcular}
-\nabla f_k =  \left(\frac{\partial f_k}{\partial x_1}, \dots, \frac{\partial f_k}{\partial x_n}\right)\epsilon
+&\text{Cada passo do Reverse AD irá calcular}\\
+\nabla f_k &=  \left(\frac{\partial f_k}{\partial x_1}, \dots, \frac{\partial f_k}{\partial x_n}\right)
+\end{align*}
 $$
 Então calculamos uma linha inteira da matriz Jacobiana, nesse sentido temos que o custo do metódo `reverseAD` é $m\cdot c \cdot ops(f)$ ([^Baydin]).
 Isso nos dá uma ideia de que o metódo pode ser bom para funções $\mathbb{R}^n \to \mathbb{R}^m$ com $m \ll n$
@@ -276,4 +384,3 @@ chamada de função perda, em razão dos parâmetros da rede neural (pesos e vie
 1. [Austin, David (2017). How to Differentiate with a Computer](http://www.ams.org/publicoutreach/feature-column/fc-2017-12)
 1. [Atilim Gunes Baydin et al. (2018), Automatic Differentiation in Machine Learning: a Survey, JMLR](https://jmlr.org/papers/v18/17-468.html)
 1. [Rackauckas, Chris (2020). Forward-Mode Automatic Differentiation (AD) via High Dimensional Algebras](https://mitmath.github.io/18337/lecture8/automatic_differentiation)
-1. [Radcliffe, Sidney (2020). Reverse-mode automatic differentiation from scratch, in Python](https://sidsite.com/posts/autodiff/)

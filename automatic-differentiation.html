@@ -700,7 +700,7 @@ f(a + \epsilon) &= f(a) + f'(a)\epsilon + \frac{f''(a)}{2!}\epsilon^2 + \sum_{k=
 
 
 <pre class="output">
-Main.##WeaveSandBox#281.D&#40;3.0, 1.0&#41;
+Main.##WeaveSandBox#312.D&#40;3.0, 1.0&#41;
 </pre>
 
 
@@ -908,57 +908,145 @@ w_y &= (t(y)u(y))'\\
 &= h(x, y+\epsilon, z)_\epsilon
 \end{align*}
 \]</p>
-<p>Então usar o metódo <code>Forward AD</code> nada mais é do que avaliar a função no ponto com Números Duais</p>
-<h4>Reverse AD</h4>
+<p>Então usar o metódo <code>Forward AD</code> nada mais é do que avaliar a função no ponto com Números Duais, mas vamos implementar o procedimento de grafo computacional acima para calcular a derivada no ponto <span class="math">$\theta$</span>, e também por números Duais</p>
 
 
 <pre class='hljl'>
-<span class='hljl-k'>using</span><span class='hljl-t'> </span><span class='hljl-n'>LinearAlgebra</span><span class='hljl-t'>
-</span><span class='hljl-nf'>f</span><span class='hljl-p'>(</span><span class='hljl-n'>x</span><span class='hljl-p'>,</span><span class='hljl-n'>y</span><span class='hljl-p'>,</span><span class='hljl-n'>z</span><span class='hljl-p'>)</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>x</span><span class='hljl-oB'>*</span><span class='hljl-n'>y</span><span class='hljl-oB'>*</span><span class='hljl-nf'>sin</span><span class='hljl-p'>(</span><span class='hljl-n'>y</span><span class='hljl-oB'>*</span><span class='hljl-n'>z</span><span class='hljl-p'>)</span><span class='hljl-t'>
-</span><span class='hljl-nf'>f</span><span class='hljl-p'>(</span><span class='hljl-nf'>D</span><span class='hljl-p'>(</span><span class='hljl-ni'>3</span><span class='hljl-p'>,</span><span class='hljl-ni'>1</span><span class='hljl-p'>),</span><span class='hljl-t'> </span><span class='hljl-oB'>-</span><span class='hljl-ni'>1</span><span class='hljl-p'>,</span><span class='hljl-t'> </span><span class='hljl-ni'>2</span><span class='hljl-p'>)</span><span class='hljl-t'>
-</span><span class='hljl-nf'>f</span><span class='hljl-p'>(</span><span class='hljl-ni'>3</span><span class='hljl-p'>,</span><span class='hljl-t'> </span><span class='hljl-nf'>D</span><span class='hljl-p'>(</span><span class='hljl-oB'>-</span><span class='hljl-ni'>1</span><span class='hljl-p'>,</span><span class='hljl-ni'>1</span><span class='hljl-p'>),</span><span class='hljl-t'> </span><span class='hljl-ni'>2</span><span class='hljl-p'>)</span><span class='hljl-t'>
-</span><span class='hljl-nf'>f</span><span class='hljl-p'>(</span><span class='hljl-ni'>3</span><span class='hljl-p'>,</span><span class='hljl-t'> </span><span class='hljl-oB'>-</span><span class='hljl-ni'>1</span><span class='hljl-p'>,</span><span class='hljl-t'> </span><span class='hljl-nf'>D</span><span class='hljl-p'>(</span><span class='hljl-ni'>2</span><span class='hljl-p'>,</span><span class='hljl-ni'>1</span><span class='hljl-p'>))</span><span class='hljl-t'>
-</span><span class='hljl-n'>f_x</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-oB'>-</span><span class='hljl-nf'>sin</span><span class='hljl-p'>(</span><span class='hljl-oB'>-</span><span class='hljl-ni'>2</span><span class='hljl-p'>)</span><span class='hljl-t'>
-</span><span class='hljl-n'>f_y</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-ni'>3</span><span class='hljl-oB'>*</span><span class='hljl-nf'>sin</span><span class='hljl-p'>(</span><span class='hljl-oB'>-</span><span class='hljl-ni'>2</span><span class='hljl-p'>)</span><span class='hljl-t'> </span><span class='hljl-oB'>-</span><span class='hljl-t'> </span><span class='hljl-ni'>6</span><span class='hljl-oB'>*</span><span class='hljl-nf'>cos</span><span class='hljl-p'>(</span><span class='hljl-oB'>-</span><span class='hljl-ni'>2</span><span class='hljl-p'>)</span><span class='hljl-t'>
-</span><span class='hljl-n'>f_z</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-ni'>3</span><span class='hljl-oB'>*</span><span class='hljl-nf'>cos</span><span class='hljl-p'>(</span><span class='hljl-oB'>-</span><span class='hljl-ni'>2</span><span class='hljl-p'>)</span><span class='hljl-t'>
+<span class='hljl-k'>function</span><span class='hljl-t'> </span><span class='hljl-nf'>ForwardAD</span><span class='hljl-p'>(</span><span class='hljl-n'>x</span><span class='hljl-p'>,</span><span class='hljl-n'>y</span><span class='hljl-p'>,</span><span class='hljl-n'>z</span><span class='hljl-p'>,</span><span class='hljl-t'> </span><span class='hljl-n'>em</span><span class='hljl-oB'>=</span><span class='hljl-sc'>&#39;x&#39;</span><span class='hljl-p'>)</span><span class='hljl-t'>
+    </span><span class='hljl-cs'>## Traço</span><span class='hljl-t'>
+    </span><span class='hljl-n'>t</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>x</span><span class='hljl-oB'>+</span><span class='hljl-n'>y</span><span class='hljl-t'>
+    </span><span class='hljl-n'>v</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>y</span><span class='hljl-oB'>*</span><span class='hljl-n'>z</span><span class='hljl-t'>
+    </span><span class='hljl-n'>u</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-nf'>sin</span><span class='hljl-p'>(</span><span class='hljl-n'>v</span><span class='hljl-p'>)</span><span class='hljl-t'>
+    </span><span class='hljl-n'>w</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>t</span><span class='hljl-oB'>*</span><span class='hljl-n'>u</span><span class='hljl-t'>
 
-</span><span class='hljl-n'>A</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-nf'>zeros</span><span class='hljl-p'>(</span><span class='hljl-ni'>7</span><span class='hljl-p'>,</span><span class='hljl-ni'>7</span><span class='hljl-p'>)</span><span class='hljl-t'> </span><span class='hljl-oB'>+</span><span class='hljl-t'> </span><span class='hljl-n'>I</span><span class='hljl-t'>
-</span><span class='hljl-n'>A</span><span class='hljl-p'>[</span><span class='hljl-ni'>1</span><span class='hljl-p'>,</span><span class='hljl-ni'>4</span><span class='hljl-p'>]</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-ni'>1</span><span class='hljl-t'>
-</span><span class='hljl-n'>A</span><span class='hljl-p'>[</span><span class='hljl-ni'>2</span><span class='hljl-p'>,</span><span class='hljl-ni'>4</span><span class='hljl-p'>]</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-oB'>-</span><span class='hljl-ni'>3</span><span class='hljl-t'>
-</span><span class='hljl-n'>A</span><span class='hljl-p'>[</span><span class='hljl-ni'>2</span><span class='hljl-p'>,</span><span class='hljl-ni'>5</span><span class='hljl-p'>]</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-oB'>-</span><span class='hljl-ni'>2</span><span class='hljl-t'>
-</span><span class='hljl-n'>A</span><span class='hljl-p'>[</span><span class='hljl-ni'>3</span><span class='hljl-p'>,</span><span class='hljl-ni'>5</span><span class='hljl-p'>]</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-ni'>1</span><span class='hljl-t'>
-</span><span class='hljl-n'>A</span><span class='hljl-p'>[</span><span class='hljl-ni'>4</span><span class='hljl-p'>,</span><span class='hljl-ni'>7</span><span class='hljl-p'>]</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-oB'>-</span><span class='hljl-nf'>sin</span><span class='hljl-p'>(</span><span class='hljl-oB'>-</span><span class='hljl-ni'>2</span><span class='hljl-p'>)</span><span class='hljl-t'>
-</span><span class='hljl-n'>A</span><span class='hljl-p'>[</span><span class='hljl-ni'>5</span><span class='hljl-p'>,</span><span class='hljl-ni'>6</span><span class='hljl-p'>]</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-nf'>cos</span><span class='hljl-p'>(</span><span class='hljl-oB'>-</span><span class='hljl-ni'>2</span><span class='hljl-p'>)</span><span class='hljl-t'>
-</span><span class='hljl-n'>A</span><span class='hljl-p'>[</span><span class='hljl-ni'>6</span><span class='hljl-p'>,</span><span class='hljl-ni'>7</span><span class='hljl-p'>]</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-oB'>-</span><span class='hljl-ni'>3</span><span class='hljl-t'>
-</span><span class='hljl-n'>b</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-nf'>zeros</span><span class='hljl-p'>(</span><span class='hljl-ni'>7</span><span class='hljl-p'>)</span><span class='hljl-t'>
-</span><span class='hljl-n'>b</span><span class='hljl-p'>[</span><span class='hljl-ni'>7</span><span class='hljl-p'>]</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-ni'>1</span><span class='hljl-t'>
-</span><span class='hljl-n'>X</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>A</span><span class='hljl-oB'>\</span><span class='hljl-n'>b</span>
+    </span><span class='hljl-cs'>## Tangentes</span><span class='hljl-t'>
+    </span><span class='hljl-k'>if</span><span class='hljl-t'> </span><span class='hljl-n'>em</span><span class='hljl-t'> </span><span class='hljl-oB'>==</span><span class='hljl-t'> </span><span class='hljl-sc'>&#39;x&#39;</span><span class='hljl-t'>
+        </span><span class='hljl-n'>t̄</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-ni'>1</span><span class='hljl-t'>
+        </span><span class='hljl-n'>v̄</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-ni'>0</span><span class='hljl-t'>
+        </span><span class='hljl-n'>ū</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-ni'>0</span><span class='hljl-t'>
+        </span><span class='hljl-n'>w̄</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>t̄</span><span class='hljl-oB'>*</span><span class='hljl-n'>u</span><span class='hljl-t'>
+    </span><span class='hljl-k'>elseif</span><span class='hljl-t'> </span><span class='hljl-n'>em</span><span class='hljl-t'> </span><span class='hljl-oB'>==</span><span class='hljl-t'> </span><span class='hljl-sc'>&#39;y&#39;</span><span class='hljl-t'>
+        </span><span class='hljl-n'>t̄</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-ni'>1</span><span class='hljl-t'>
+        </span><span class='hljl-n'>v̄</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>z</span><span class='hljl-t'>
+        </span><span class='hljl-n'>ū</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-nf'>cos</span><span class='hljl-p'>(</span><span class='hljl-n'>v</span><span class='hljl-p'>)</span><span class='hljl-oB'>*</span><span class='hljl-n'>v̄</span><span class='hljl-t'>
+        </span><span class='hljl-n'>w̄</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>u</span><span class='hljl-t'> </span><span class='hljl-oB'>+</span><span class='hljl-t'> </span><span class='hljl-n'>ū</span><span class='hljl-oB'>*</span><span class='hljl-n'>t</span><span class='hljl-t'>
+    </span><span class='hljl-k'>else</span><span class='hljl-t'>
+        </span><span class='hljl-n'>t̄</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-ni'>0</span><span class='hljl-t'>
+        </span><span class='hljl-n'>v̄</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>y</span><span class='hljl-t'>
+        </span><span class='hljl-n'>ū</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-nf'>cos</span><span class='hljl-p'>(</span><span class='hljl-n'>v</span><span class='hljl-p'>)</span><span class='hljl-oB'>*</span><span class='hljl-n'>v̄</span><span class='hljl-t'>
+        </span><span class='hljl-n'>w̄</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>ū</span><span class='hljl-oB'>*</span><span class='hljl-n'>t</span><span class='hljl-t'>
+    </span><span class='hljl-k'>end</span><span class='hljl-t'>
+</span><span class='hljl-k'>end</span>
 </pre>
 
 
 <pre class="output">
-7-element Array&#123;Float64,1&#125;:
-  0.9092974268256817
- -0.23101126119419058
- -1.2484405096414273
- -0.9092974268256817
-  1.2484405096414273
-  3.0
-  1.0
+ForwardAD &#40;generic function with 2 methods&#41;
 </pre>
 
+
+<p>E podemos visualizar os resultados</p>
 
 
 <pre class='hljl'>
-<span class='hljl-k'>function</span><span class='hljl-t'> </span><span class='hljl-nf'>reverseAD</span><span class='hljl-p'>()</span>
+<span class='hljl-nf'>println</span><span class='hljl-p'>(</span><span class='hljl-s'>&quot;Forward implementado manualmente: ∇h = (&quot;</span><span class='hljl-p'>,</span><span class='hljl-t'> </span><span class='hljl-nf'>ForwardAD</span><span class='hljl-p'>(</span><span class='hljl-n'>θ</span><span class='hljl-oB'>...</span><span class='hljl-p'>,</span><span class='hljl-t'> </span><span class='hljl-sc'>&#39;x&#39;</span><span class='hljl-p'>),</span><span class='hljl-s'>&quot;,&quot;</span><span class='hljl-p'>,</span><span class='hljl-nf'>ForwardAD</span><span class='hljl-p'>(</span><span class='hljl-n'>θ</span><span class='hljl-oB'>...</span><span class='hljl-p'>,</span><span class='hljl-t'> </span><span class='hljl-sc'>&#39;y&#39;</span><span class='hljl-p'>),</span><span class='hljl-s'>&quot;,&quot;</span><span class='hljl-p'>,</span><span class='hljl-nf'>ForwardAD</span><span class='hljl-p'>(</span><span class='hljl-n'>θ</span><span class='hljl-oB'>...</span><span class='hljl-p'>,</span><span class='hljl-t'> </span><span class='hljl-sc'>&#39;z&#39;</span><span class='hljl-p'>),</span><span class='hljl-s'>&quot;)&quot;</span><span class='hljl-p'>)</span><span class='hljl-t'>
+</span><span class='hljl-nf'>println</span><span class='hljl-p'>(</span><span class='hljl-s'>&quot;Forward implementado com Duais: ∇h = (&quot;</span><span class='hljl-p'>,</span><span class='hljl-t'> </span><span class='hljl-nf'>h</span><span class='hljl-p'>(</span><span class='hljl-nf'>D</span><span class='hljl-p'>(</span><span class='hljl-oB'>-</span><span class='hljl-ni'>1</span><span class='hljl-p'>,</span><span class='hljl-ni'>1</span><span class='hljl-p'>),</span><span class='hljl-t'> </span><span class='hljl-n'>π</span><span class='hljl-oB'>/</span><span class='hljl-ni'>4</span><span class='hljl-p'>,</span><span class='hljl-t'> </span><span class='hljl-ni'>2</span><span class='hljl-oB'>*</span><span class='hljl-n'>π</span><span class='hljl-p'>)</span><span class='hljl-oB'>.</span><span class='hljl-n'>ϵ</span><span class='hljl-p'>,</span><span class='hljl-s'>&quot;,&quot;</span><span class='hljl-p'>,</span><span class='hljl-nf'>h</span><span class='hljl-p'>(</span><span class='hljl-oB'>-</span><span class='hljl-ni'>1</span><span class='hljl-p'>,</span><span class='hljl-t'> </span><span class='hljl-nf'>D</span><span class='hljl-p'>(</span><span class='hljl-n'>π</span><span class='hljl-oB'>/</span><span class='hljl-ni'>4</span><span class='hljl-p'>,</span><span class='hljl-ni'>1</span><span class='hljl-p'>),</span><span class='hljl-t'> </span><span class='hljl-ni'>2</span><span class='hljl-oB'>*</span><span class='hljl-n'>π</span><span class='hljl-p'>)</span><span class='hljl-oB'>.</span><span class='hljl-n'>ϵ</span><span class='hljl-p'>,</span><span class='hljl-s'>&quot;,&quot;</span><span class='hljl-p'>,</span><span class='hljl-nf'>h</span><span class='hljl-p'>(</span><span class='hljl-oB'>-</span><span class='hljl-ni'>1</span><span class='hljl-p'>,</span><span class='hljl-t'> </span><span class='hljl-n'>π</span><span class='hljl-oB'>/</span><span class='hljl-ni'>4</span><span class='hljl-p'>,</span><span class='hljl-t'> </span><span class='hljl-nf'>D</span><span class='hljl-p'>(</span><span class='hljl-ni'>2</span><span class='hljl-oB'>*</span><span class='hljl-n'>π</span><span class='hljl-p'>,</span><span class='hljl-ni'>1</span><span class='hljl-p'>))</span><span class='hljl-oB'>.</span><span class='hljl-n'>ϵ</span><span class='hljl-p'>,</span><span class='hljl-s'>&quot;)&quot;</span><span class='hljl-p'>)</span><span class='hljl-t'>
+</span><span class='hljl-nf'>println</span><span class='hljl-p'>(</span><span class='hljl-s'>&quot;Gradiente calculado analiticamente: ∇h = (&quot;</span><span class='hljl-p'>,</span><span class='hljl-t'> </span><span class='hljl-nf'>∂h∂x</span><span class='hljl-p'>(</span><span class='hljl-n'>θ</span><span class='hljl-oB'>...</span><span class='hljl-p'>),</span><span class='hljl-s'>&quot;,&quot;</span><span class='hljl-p'>,</span><span class='hljl-nf'>∂h∂y</span><span class='hljl-p'>(</span><span class='hljl-n'>θ</span><span class='hljl-oB'>...</span><span class='hljl-p'>),</span><span class='hljl-s'>&quot;,&quot;</span><span class='hljl-p'>,</span><span class='hljl-nf'>∂h∂z</span><span class='hljl-p'>(</span><span class='hljl-n'>θ</span><span class='hljl-oB'>...</span><span class='hljl-p'>),</span><span class='hljl-s'>&quot;)&quot;</span><span class='hljl-p'>)</span>
 </pre>
 
 
-<pre class="julia-error">
-ERROR: syntax: incomplete: premature end of input
+<pre class="output">
+Forward implementado manualmente: ∇h &#61; &#40;-0.9753679720836315,-1.272799766223
+79,-0.03717897426751981&#41;
+Forward implementado com Duais: ∇h &#61; &#40;-0.9753679720836315,-1.27279976622379
+,-0.03717897426751981&#41;
+Gradiente calculado analiticamente: ∇h &#61; &#40;-0.9753679720836315,-1.2727997662
+2379,-0.03717897426751981&#41;
 </pre>
 
 
+<h4>Reverse AD</h4>
+<p>Vamos agora olhar para o outro metódo de Diferenciação Automática, o metódo reverso, que nada mais é do que a aplicação da regra da cadeia multivariável.</p>
+<h5>Regra da Cadeia multivariável</h5>
+<p>Vamos olhar para o diagrama da regra da cadeia de uma função <span class="math">$z(x(s,t),y(s,t))$</span></p>
+<p><img src="chainrule.png" alt="Árvore para a regra da cadeia" /></p>
+<p>Para calcular as derivadas parciais de <span class="math">$z$</span> em relação a <span class="math">$s,t$</span>, podemos vir &quot;descendo&quot; a árvore multiplicando as derivadas que estão no mesmo caminho, se alguma variável alvo aparece em dois &quot;ramos&quot; diferentes da árvore, somamos os ramos ao final,  ficando então:</p>
+<p class="math">\[
+\begin{align*}
+\frac{\partial z}{\partial s} &= \frac{\partial z}{\partial x}\frac{\partial x}{\partial s} + \frac{\partial z}{\partial y}\frac{\partial y}{\partial s}\\
+\frac{\partial z}{\partial t} &= \frac{\partial z}{\partial x}\frac{\partial x}{\partial t} + \frac{\partial z}{\partial y}\frac{\partial y}{\partial t}
+\end{align*}
+\]</p>
+<p>Se você entendeu o processo de cálculo das derivadas parciais de <span class="math">$z$</span> atráves desta árvore, você entendeu o modo reverso da Diferenciação Automática&#33;&#33;</p>
+<h5>O procedimento para Reverse AD</h5>
+<p>Há dois passos para o cálculo das derivadas pelo metódo reverso, o primeiro é chamado de <code>Forward Pass</code>, que é avaliar a função atráves do grafo computacional visto na seção sobre <code>Forward AD</code>, e com isso teremos as variáveis do traço da mesma maneira, mas ao invés de calcular as tangentes, que seriam as derivadas de cada variável do traço em relação às variáveis de entrada, calculamos agora o <code>adjunto</code>, que é a derivada da função em razão de variável do traço. Nesse sentido temos</p>
+<table><tr><th>Traço</th><th>Adjunto</th></tr><tr><td><span class="math">$t = x+y$</span></td><td><span class="math">$\bar{w}=\frac{\partial w}{\partial w}=1$</span></td></tr><tr><td><span class="math">$v=yz$</span></td><td><span class="math">$\bar{u}=\frac{\partial w}{\partial u}\bar{w}$</span></td></tr><tr><td><span class="math">$u=sin(v)$</span></td><td><span class="math">$\bar{v}=\frac{\partial u}{\partial v}\bar{u}$</span></td></tr><tr><td><span class="math">$w = tu$</span></td><td><span class="math">$\bar{t} = \frac{\partial w}{\partial t}\bar{w}$</span></td></tr><tr><td></td><td><span class="math">$\bar{x} = \frac{\partial t}{\partial x}\bar{t} = \frac{\partial w}{\partial x}$</span></td></tr><tr><td></td><td><span class="math">$\bar{y} = \frac{\partial t}{\partial y}\bar{t}+\frac{\partial v}{\partial y}\bar{v} = \frac{\partial w}{\partial y}$</span></td></tr><tr><td></td><td><span class="math">$\bar{z} = \frac{\partial v}{\partial z}\bar{v} = \frac{\partial w}{\partial z}$</span></td></tr></table>
+<p>Perceba que as variáveis adjuntas nos dão um sistema a ser resolvido&#33; Podemos então montar a seguinte matriz</p>
+<p class="math">\[
+A = \left[\begin{array}{ccccccc} 1 & 0 & 0 & 0 & 0 & 0 & 0 \\ -\frac{\partial w}{\partial u} & 1 & 0 & 0 & 0 & 0 & 0 \\ 0 & -\frac{\partial u}{\partial v} & 1 & 0 & 0 & 0 & 0 \\ -\frac{\partial w}{\partial t} & 0 & 0 & 1 & 0 & 0 & 0 \\ 0 & 0 & 0 & -\frac{\partial t}{\partial x} & 1 & 0 & 0 \\ 0 & 0 & -\frac{\partial v}{\partial y} & -\frac{\partial t}{\partial y} & 0 & 1 & 0 \\ 0 & 0 & -\frac{\partial v}{\partial z} & 0 & 0 & 0 & 1 \end{array}\right], X = \left[\begin{array}{c} \bar{w} \\ \bar{u} \\ \bar{v} \\ \bar{t} \\ \bar{x} \\ \bar{y} \\ \bar{z} \end{array}\right]
+\]</p>
+<p>Perceba que este sistema nos dá</p>
+<p class="math">\[
+AX = \left[\begin{array}{ccccccc} 1&0&0&0&0&0&0 \end{array}\right]^t
+\]</p>
+<p>Como a matriz é triangular, é bem fácil resolvermos e as últimas componentes do vetor <span class="math">$X$</span> serão o vetor gradiente que estamos em busca. Basta então calcular as derivadas intermediárias, podem ser calculadas a mão, ou utilizando números duais, vamos escrever a função que faz o <code>Reverse AD</code> para calcular <span class="math">$\nabla h(x,y,z)$</span></p>
+
+
+<pre class='hljl'>
+<span class='hljl-k'>using</span><span class='hljl-t'> </span><span class='hljl-n'>LinearAlgebra</span><span class='hljl-t'>
+</span><span class='hljl-k'>function</span><span class='hljl-t'> </span><span class='hljl-nf'>ReverseAD</span><span class='hljl-p'>(</span><span class='hljl-n'>x</span><span class='hljl-p'>,</span><span class='hljl-n'>y</span><span class='hljl-p'>,</span><span class='hljl-n'>z</span><span class='hljl-p'>)</span><span class='hljl-t'>
+    </span><span class='hljl-cs'>## Traço</span><span class='hljl-t'>
+    </span><span class='hljl-n'>tx</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-nf'>D</span><span class='hljl-p'>(</span><span class='hljl-n'>x</span><span class='hljl-p'>,</span><span class='hljl-ni'>1</span><span class='hljl-p'>)</span><span class='hljl-t'> </span><span class='hljl-oB'>+</span><span class='hljl-t'> </span><span class='hljl-n'>y</span><span class='hljl-t'>
+    </span><span class='hljl-n'>ty</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>x</span><span class='hljl-t'> </span><span class='hljl-oB'>+</span><span class='hljl-t'> </span><span class='hljl-nf'>D</span><span class='hljl-p'>(</span><span class='hljl-n'>y</span><span class='hljl-p'>,</span><span class='hljl-ni'>1</span><span class='hljl-p'>)</span><span class='hljl-t'>
+    </span><span class='hljl-n'>vy</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-nf'>D</span><span class='hljl-p'>(</span><span class='hljl-n'>y</span><span class='hljl-p'>,</span><span class='hljl-ni'>1</span><span class='hljl-p'>)</span><span class='hljl-oB'>*</span><span class='hljl-n'>z</span><span class='hljl-t'>
+    </span><span class='hljl-n'>vz</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>y</span><span class='hljl-oB'>*</span><span class='hljl-nf'>D</span><span class='hljl-p'>(</span><span class='hljl-n'>z</span><span class='hljl-p'>,</span><span class='hljl-ni'>1</span><span class='hljl-p'>)</span><span class='hljl-t'>
+    </span><span class='hljl-n'>u</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-nf'>sin</span><span class='hljl-p'>(</span><span class='hljl-nf'>D</span><span class='hljl-p'>(</span><span class='hljl-n'>vy</span><span class='hljl-oB'>.</span><span class='hljl-n'>v</span><span class='hljl-p'>,</span><span class='hljl-ni'>1</span><span class='hljl-p'>))</span><span class='hljl-t'>
+    </span><span class='hljl-n'>wu</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>tx</span><span class='hljl-oB'>.</span><span class='hljl-n'>v</span><span class='hljl-oB'>*</span><span class='hljl-nf'>D</span><span class='hljl-p'>(</span><span class='hljl-n'>u</span><span class='hljl-oB'>.</span><span class='hljl-n'>v</span><span class='hljl-p'>,</span><span class='hljl-ni'>1</span><span class='hljl-p'>)</span><span class='hljl-t'>
+    </span><span class='hljl-n'>wt</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-nf'>D</span><span class='hljl-p'>(</span><span class='hljl-n'>tx</span><span class='hljl-oB'>.</span><span class='hljl-n'>v</span><span class='hljl-p'>,</span><span class='hljl-ni'>1</span><span class='hljl-p'>)</span><span class='hljl-oB'>*</span><span class='hljl-n'>u</span><span class='hljl-oB'>.</span><span class='hljl-n'>v</span><span class='hljl-t'>
+
+    </span><span class='hljl-n'>∂w∂u</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>wu</span><span class='hljl-oB'>.</span><span class='hljl-n'>ϵ</span><span class='hljl-t'>
+    </span><span class='hljl-n'>∂u∂v</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>u</span><span class='hljl-oB'>.</span><span class='hljl-n'>ϵ</span><span class='hljl-t'>
+    </span><span class='hljl-n'>∂w∂t</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>wt</span><span class='hljl-oB'>.</span><span class='hljl-n'>ϵ</span><span class='hljl-t'>
+    </span><span class='hljl-n'>∂t∂x</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>tx</span><span class='hljl-oB'>.</span><span class='hljl-n'>ϵ</span><span class='hljl-t'>
+    </span><span class='hljl-n'>∂t∂y</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>ty</span><span class='hljl-oB'>.</span><span class='hljl-n'>ϵ</span><span class='hljl-t'>
+    </span><span class='hljl-n'>∂v∂y</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>vy</span><span class='hljl-oB'>.</span><span class='hljl-n'>ϵ</span><span class='hljl-t'>
+    </span><span class='hljl-n'>∂v∂z</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>vz</span><span class='hljl-oB'>.</span><span class='hljl-n'>ϵ</span><span class='hljl-t'>
+
+    </span><span class='hljl-n'>A</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-nf'>zeros</span><span class='hljl-p'>(</span><span class='hljl-ni'>7</span><span class='hljl-p'>,</span><span class='hljl-ni'>7</span><span class='hljl-p'>)</span><span class='hljl-t'> </span><span class='hljl-oB'>+</span><span class='hljl-t'> </span><span class='hljl-n'>I</span><span class='hljl-t'>
+    </span><span class='hljl-n'>A</span><span class='hljl-p'>[</span><span class='hljl-ni'>2</span><span class='hljl-p'>,</span><span class='hljl-ni'>1</span><span class='hljl-p'>]</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-oB'>-</span><span class='hljl-n'>∂w∂u</span><span class='hljl-t'>
+    </span><span class='hljl-n'>A</span><span class='hljl-p'>[</span><span class='hljl-ni'>3</span><span class='hljl-p'>,</span><span class='hljl-ni'>2</span><span class='hljl-p'>]</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-oB'>-</span><span class='hljl-n'>∂u∂v</span><span class='hljl-t'>
+    </span><span class='hljl-n'>A</span><span class='hljl-p'>[</span><span class='hljl-ni'>4</span><span class='hljl-p'>,</span><span class='hljl-ni'>1</span><span class='hljl-p'>]</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-oB'>-</span><span class='hljl-n'>∂w∂t</span><span class='hljl-t'>
+    </span><span class='hljl-n'>A</span><span class='hljl-p'>[</span><span class='hljl-ni'>5</span><span class='hljl-p'>,</span><span class='hljl-ni'>4</span><span class='hljl-p'>]</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-oB'>-</span><span class='hljl-n'>∂t∂x</span><span class='hljl-t'>
+    </span><span class='hljl-n'>A</span><span class='hljl-p'>[</span><span class='hljl-ni'>6</span><span class='hljl-p'>,</span><span class='hljl-ni'>3</span><span class='hljl-p'>]</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-oB'>-</span><span class='hljl-n'>∂v∂y</span><span class='hljl-t'>
+    </span><span class='hljl-n'>A</span><span class='hljl-p'>[</span><span class='hljl-ni'>6</span><span class='hljl-p'>,</span><span class='hljl-ni'>4</span><span class='hljl-p'>]</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-oB'>-</span><span class='hljl-n'>∂t∂y</span><span class='hljl-t'>
+    </span><span class='hljl-n'>A</span><span class='hljl-p'>[</span><span class='hljl-ni'>7</span><span class='hljl-p'>,</span><span class='hljl-ni'>3</span><span class='hljl-p'>]</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-oB'>-</span><span class='hljl-n'>∂v∂z</span><span class='hljl-t'>
+    </span><span class='hljl-n'>b</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-nf'>zeros</span><span class='hljl-p'>(</span><span class='hljl-ni'>7</span><span class='hljl-p'>)</span><span class='hljl-t'>
+    </span><span class='hljl-n'>b</span><span class='hljl-p'>[</span><span class='hljl-ni'>1</span><span class='hljl-p'>]</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-ni'>1</span><span class='hljl-t'>
+    </span><span class='hljl-n'>X</span><span class='hljl-t'> </span><span class='hljl-oB'>=</span><span class='hljl-t'> </span><span class='hljl-n'>A</span><span class='hljl-oB'>\</span><span class='hljl-n'>b</span><span class='hljl-t'>
+    </span><span class='hljl-k'>return</span><span class='hljl-t'> </span><span class='hljl-n'>X</span><span class='hljl-p'>[</span><span class='hljl-k'>end</span><span class='hljl-oB'>-</span><span class='hljl-ni'>2</span><span class='hljl-oB'>:</span><span class='hljl-k'>end</span><span class='hljl-p'>]</span><span class='hljl-t'>
+</span><span class='hljl-k'>end</span>
+</pre>
+
+
+<pre class="output">
+ReverseAD &#40;generic function with 1 method&#41;
+</pre>
+
+
+<p>Calculando em <span class="math">$\theta$</span></p>
+
+
+<pre class='hljl'>
+<span class='hljl-nf'>println</span><span class='hljl-p'>(</span><span class='hljl-s'>&quot;∇h(θ) = &quot;</span><span class='hljl-p'>,</span><span class='hljl-t'> </span><span class='hljl-nf'>ReverseAD</span><span class='hljl-p'>(</span><span class='hljl-n'>θ</span><span class='hljl-oB'>...</span><span class='hljl-p'>))</span>
+</pre>
+
+
+<pre class="output">
+∇h&#40;θ&#41; &#61; &#91;-0.9753679720836315, -1.27279976622379, -0.03717897426751981&#93;
+</pre>
+
+
+<p>Há outras maneiras de implementar o <code>Reverse AD</code>, está é uma das mais fáceis, e apresentado em <a href="#footnote-Austin" class="footnote">[Austin]</a>. Note que implementar o metódo reverso para um caso geral é muito mais complicado do que o metódo direto. Todos estes metódos estão implementados no <code>Julia</code> atráves das mais diversas bibliotecas: <code>ForwardDiff.jl, ReverseDiff.jl, DualNumbers.jl</code> e também nas biblitecas de Redes Neurais e Otimização da sua linguagem favorita.</p>
 <h5>Custo computacional</h5>
 <p>Vamos pensar na matriz Jacobiana de uma função <span class="math">$f: \mathbb{R}^n \to \mathbb{R}^m$</span></p>
 <p class="math">\[
@@ -975,9 +1063,11 @@ f(x_1, \dots, x_k + \epsilon, \dots, x_n) = (f_1, \dots, f_m) + \left(\frac{\par
 <p>Onde a parte associada ao número Dual é justamente uma coluna da matriz jacobiana, então para calcular toda a matriz seria preciso repetir a operação <span class="math">$n$</span> vezes. Seja <span class="math">$ops(f)$</span> o custo computacional/de operações para o cálculo de <span class="math">$f$</span>, e <span class="math">$c > 0$</span>, temos que o custo do metódo <code>Forward AD</code> é <span class="math">$n\cdot c \cdot ops(f)$</span> &#40;<a href="#footnote-Baydin" class="footnote">[Baydin]</a>&#41;. Isso nos dá uma ideia de que o metódo pode ser bom para funções <span class="math">$\mathbb{R}^n \to \mathbb{R}^m$</span> com <span class="math">$n \ll m$</span></p>
 <p>No metódo <code>Reverse AD</code> quando calculamos um passo estamos calculando a derivada de uma função em relação à todas as variáveis de uma vez, nesse sentido:</p>
 <p class="math">\[
+\begin{align*}
 f(x_1, \dots, x_n) &= (f_1, \dots, f_m)\\
-\text{Cada passo do Reverse AD irá calcular}
-\nabla f_k =  \left(\frac{\partial f_k}{\partial x_1}, \dots, \frac{\partial f_k}{\partial x_n}\right)\epsilon
+&\text{Cada passo do Reverse AD irá calcular}\\
+\nabla f_k &=  \left(\frac{\partial f_k}{\partial x_1}, \dots, \frac{\partial f_k}{\partial x_n}\right)
+\end{align*}
 \]</p>
 <p>Então calculamos uma linha inteira da matriz Jacobiana, nesse sentido temos que o custo do metódo <code>reverseAD</code> é <span class="math">$m\cdot c \cdot ops(f)$</span> &#40;<a href="#footnote-Baydin" class="footnote">[Baydin]</a>&#41;. Isso nos dá uma ideia de que o metódo pode ser bom para funções <span class="math">$\mathbb{R}^n \to \mathbb{R}^m$</span> com <span class="math">$m \ll n$</span></p>
 <p>Em particular, estamos interessados no modo reverso para funções de erro que são do tipo <span class="math">$\mathbb{R} \to \mathbb{R}^m$</span> que é utilizado em sua principal aplicação: Cálculo das derivadas para aprendizado com Gradiente Descendente</p>
@@ -995,8 +1085,6 @@ f(x_1, \dots, x_n) &= (f_1, \dots, f_m)\\
 </li>
 <li><p><a href="https://mitmath.github.io/18337/lecture8/automatic_differentiation">Rackauckas, Chris &#40;2020&#41;. Forward-Mode Automatic Differentiation &#40;AD&#41; via High Dimensional Algebras</a></p>
 </li>
-<li><p><a href="https://sidsite.com/posts/autodiff/">Radcliffe, Sidney &#40;2020&#41;. Reverse-mode automatic differentiation from scratch, in Python</a></p>
-</li>
 </ol>
 
 
@@ -1004,7 +1092,7 @@ f(x_1, \dots, x_n) &= (f_1, \dots, f_m)\\
         <div class="footer">
           <p>
             Published from <a href="automatic-differentiation.jmd">automatic-differentiation.jmd</a>
-            using <a href="http://github.com/JunoLab/Weave.jl">Weave.jl</a> v0.10.6 on 2021-02-04.
+            using <a href="http://github.com/JunoLab/Weave.jl">Weave.jl</a> v0.10.6 on 2021-02-06.
           </p>
         </div>
       </div>
